@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Duality AI — Desert Segmentation Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#020c14;--s1:#061825;--s2:#0a2035;--s3:#0e2840;
+  --cyan:#00f5ff;--cyan2:#00aacc;--orange:#ff6b35;--green:#39ff14;
+  --gold:#ffd700;--pink:#ff2d78;--purple:#b44fff;
+  --text:#c8e8f8;--muted:#4a7a90;--border:rgba(0,245,255,.12);
+  --glow-cyan:0 0 20px rgba(0,245,255,.4),0 0 60px rgba(0,245,255,.15);
+  --glow-orange:0 0 20px rgba(255,107,53,.5),0 0 60px rgba(255,107,53,.2);
+  --glow-green:0 0 20px rgba(57,255,20,.4),0 0 60px rgba(57,255,20,.15);
+  --glow-gold:0 0 20px rgba(255,215,0,.4),0 0 60px rgba(255,215,0,.15);
+  --glow-pink:0 0 20px rgba(255,45,120,.4),0 0 60px rgba(255,45,120,.15);
+  --font-head:'Orbitron',monospace;
+  --font-body:'Rajdhani',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:15px;overflow-x:hidden;cursor:none}
+.cursor{position:fixed;width:16px;height:16px;border:2px solid var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:transform .1s,width .2s,height .2s,border-color .2s;mix-blend-mode:screen}
+.cursor-dot{position:fixed;width:4px;height:4px;background:var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:screen}
+.bg-grid{position:fixed;inset:0;z-index:0;opacity:.04;background-image:linear-gradient(var(--cyan) 1px,transparent 1px),linear-gradient(90deg,var(--cyan) 1px,transparent 1px);background-size:40px 40px;animation:gridMove 20s linear infinite}
+@keyframes gridMove{from{background-position:0 0}to{background-position:40px 40px}}
+.bg-particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.particle{position:absolute;border-radius:50%;animation:float linear infinite;opacity:0}
+@keyframes float{0%{transform:translateY(100vh) scale(0);opacity:0}10%{opacity:1}90%{opacity:.5}100%{transform:translateY(-10vh) scale(1);opacity:0}}
+.scanline{position:fixed;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px)}
+header{position:sticky;top:0;z-index:100;background:rgba(2,12,20,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px}
+.header-inner{display:flex;align-items:center;justify-content:space-between;height:62px}
+.logo-wrap{display:flex;align-items:center;gap:14px}
+.logo-hex{width:40px;height:40px;position:relative;display:flex;align-items:center;justify-content:center}
+.logo-hex::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--cyan),var(--purple));clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);animation:hexSpin 8s linear infinite}
+@keyframes hexSpin{from{filter:hue-rotate(0deg)}to{filter:hue-rotate(360deg)}}
+.logo-inner{position:relative;z-index:1;font-size:16px}
+.logo-text{font-family:var(--font-head);font-size:16px;font-weight:900;letter-spacing:2px}
+.logo-text span{color:var(--cyan)}
+.logo-sub{font-size:9px;letter-spacing:3px;color:var(--muted);margin-top:1px}
+.header-stats{display:flex;gap:24px}
+.hstat{text-align:center}
+.hstat-val{font-family:var(--font-head);font-size:14px;font-weight:700}
+.hstat-lbl{font-size:9px;letter-spacing:2px;color:var(--muted)}
+.live-badge{display:flex;align-items:center;gap:7px;padding:6px 16px;border-radius:20px;border:1px solid var(--green);color:var(--green);font-size:10px;letter-spacing:2px;background:rgba(57,255,20,.06);box-shadow:0 0 12px rgba(57,255,20,.2)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:livePulse 1.2s ease-in-out infinite}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(57,255,20,.6)}50%{box-shadow:0 0 0 6px rgba(57,255,20,0)}}
+/* Backend status badge */
+.backend-badge{display:flex;align-items:center;gap:7px;padding:4px 12px;border-radius:20px;font-size:10px;letter-spacing:1.5px;font-family:var(--font-head)}
+.backend-badge.live{border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,245,255,.06)}
+.backend-badge.demo{border:1px solid var(--gold);color:var(--gold);background:rgba(255,215,0,.06)}
+.backend-badge.offline{border:1px solid var(--pink);color:var(--pink);background:rgba(255,45,120,.06)}
+.nav-tabs{display:flex;gap:0;background:rgba(6,24,37,.8);border-bottom:1px solid var(--border);padding:0 32px;overflow-x:auto}
+.nav-tabs::-webkit-scrollbar{height:2px}
+.nav-tabs::-webkit-scrollbar-thumb{background:var(--cyan2)}
+.ntab{display:flex;align-items:center;gap:8px;padding:14px 22px;cursor:pointer;font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);border-bottom:2px solid transparent;transition:.25s;white-space:nowrap;position:relative;overflow:hidden}
+.ntab::before{content:'';position:absolute;inset:0;opacity:0;transition:.25s}
+.ntab:hover{color:var(--text)}
+.ntab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.ntab.active::before{opacity:1;background:linear-gradient(180deg,transparent,rgba(0,245,255,.06))}
+.ntab-icon{font-size:15px}
+.ntab-glow{position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:0;height:2px;background:var(--cyan);box-shadow:var(--glow-cyan);transition:.25s}
+.ntab.active .ntab-glow{width:100%}
+main{padding:24px 32px;max-width:1440px;margin:0 auto;position:relative;z-index:2}
+.panel{display:none;animation:panelIn .35s cubic-bezier(.4,0,.2,1)}
+.panel.show{display:block}
+@keyframes panelIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.card{background:linear-gradient(135deg,var(--s1),var(--s2));border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:18px;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+.card:hover{border-color:rgba(0,245,255,.25);box-shadow:0 0 30px rgba(0,245,255,.06)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.5}
+.card-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan);margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.card-title .ti{font-size:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat-card{background:linear-gradient(135deg,var(--s2),var(--s3));border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;position:relative;overflow:hidden;transition:.3s;cursor:pointer}
+.stat-card::after{content:'';position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(0,245,255,.08),transparent 70%);transition:.3s}
+.stat-card:hover::after{opacity:1}
+.stat-card:hover{transform:translateY(-4px)}
+.stat-val{font-family:var(--font-head);font-size:30px;font-weight:900;letter-spacing:-1px;line-height:1}
+.stat-lbl{font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:6px}
+.stat-trend{font-size:10px;margin-top:6px}
+.c-cyan{color:var(--cyan);text-shadow:var(--glow-cyan)}
+.c-orange{color:var(--orange);text-shadow:var(--glow-orange)}
+.c-green{color:var(--green);text-shadow:var(--glow-green)}
+.c-gold{color:var(--gold);text-shadow:var(--glow-gold)}
+.c-pink{color:var(--pink);text-shadow:var(--glow-pink)}
+.c-purple{color:var(--purple)}
+.demo-layout{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.feed-wrap{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3;border:1px solid var(--border)}
+.feed-label{position:absolute;top:12px;left:12px;font-family:var(--font-head);font-size:9px;letter-spacing:2px;padding:4px 12px;border-radius:10px;z-index:10;backdrop-filter:blur(8px)}
+.feed-label.live{background:rgba(57,255,20,.15);border:1px solid var(--green);color:var(--green);box-shadow:var(--glow-green)}
+.feed-label.seg{background:rgba(0,245,255,.1);border:1px solid var(--cyan);color:var(--cyan)}
+.feed-corners::before,.feed-corners::after{content:'';position:absolute;width:20px;height:20px;z-index:11}
+.feed-corners::before{top:6px;left:6px;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan)}
+.feed-corners::after{bottom:6px;right:6px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan)}
+video,canvas{width:100%;height:100%;object-fit:cover;display:block}
+.seg-canvas{position:absolute;inset:0;opacity:.75;mix-blend-mode:screen}
+#segOutput{width:100%;height:100%;object-fit:cover}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 10px var(--cyan);animation:scanDown 3s linear infinite;pointer-events:none;z-index:5}
+@keyframes scanDown{0%{top:-2px;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0}}
+.results-row{display:grid;grid-template-columns:1fr auto;gap:18px}
+.result-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.result-item:last-child{border-bottom:none}
+.result-key{font-size:13px;color:var(--muted);letter-spacing:.5px}
+.result-val{font-family:var(--font-head);font-size:16px;font-weight:700}
+.legend-grid{display:flex;flex-direction:column;gap:8px}
+.leg-item{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;transition:.2s;cursor:pointer}
+.leg-item:hover{background:rgba(0,245,255,.05)}
+.leg-dot{width:14px;height:14px;border-radius:4px;flex-shrink:0;box-shadow:0 0 8px currentColor}
+.leg-name{font-size:12px;font-weight:600;letter-spacing:.5px}
+.leg-pct{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:auto}
+.action-row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:10px;font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;border:none;transition:.2s;position:relative;overflow:hidden}
+.btn::before{content:'';position:absolute;inset:0;opacity:0;transition:.2s;background:rgba(255,255,255,.1)}
+.btn:hover::before{opacity:1}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-blue{background:linear-gradient(135deg,#1a4a8a,#0d2a5a);border:1px solid rgba(26,100,180,.5);color:#60aaff;box-shadow:0 0 15px rgba(26,100,180,.3)}
+.btn-red{background:linear-gradient(135deg,#8a1a2a,#5a0d18);border:1px solid rgba(220,50,80,.5);color:#ff6080;box-shadow:0 0 15px rgba(220,50,80,.3)}
+.btn-cyan{background:linear-gradient(135deg,rgba(0,245,255,.15),rgba(0,170,200,.1));border:1px solid rgba(0,245,255,.35);color:var(--cyan);box-shadow:0 0 15px rgba(0,245,255,.2)}
+.btn-orange{background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(200,70,20,.1));border:1px solid rgba(255,107,53,.35);color:var(--orange);box-shadow:0 0 15px rgba(255,107,53,.2)}
+.btn-green{background:linear-gradient(135deg,rgba(57,255,20,.12),rgba(20,180,10,.08));border:1px solid rgba(57,255,20,.3);color:var(--green);box-shadow:0 0 15px rgba(57,255,20,.2)}
+.btn-purple{background:linear-gradient(135deg,rgba(180,79,255,.15),rgba(120,40,200,.1));border:1px solid rgba(180,79,255,.35);color:var(--purple)}
+.btn-gold{background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(200,150,0,.08));border:1px solid rgba(255,215,0,.3);color:var(--gold)}
+.btn-pink{background:linear-gradient(135deg,rgba(255,45,120,.12),rgba(200,20,80,.08));border:1px solid rgba(255,45,120,.3);color:var(--pink)}
+.btn-lg{padding:14px 28px;font-size:11px}
+.iou-row{display:grid;grid-template-columns:110px 1fr 54px;gap:12px;align-items:center;margin-bottom:10px}
+.iou-lbl{font-size:12px;font-weight:600}
+.bar-track{height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:4px;transition:width 1.4s cubic-bezier(.4,0,.2,1);width:0%;position:relative}
+.bar-fill::after{content:'';position:absolute;top:0;right:0;width:4px;height:100%;border-radius:2px;background:rgba(255,255,255,.6);box-shadow:0 0 6px rgba(255,255,255,.8);animation:barGlow 2s ease-in-out infinite}
+@keyframes barGlow{0%,100%{opacity:.6}50%{opacity:1}}
+.iou-num{font-family:var(--font-mono);font-size:12px;font-weight:700;text-align:right}
+.pipe-item{display:flex;align-items:flex-start;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);position:relative}
+.pipe-item:last-child{border-bottom:none}
+.pipe-connector{position:absolute;left:19px;top:46px;bottom:-14px;width:2px;background:linear-gradient(180deg,var(--cyan),transparent);opacity:.3}
+.pipe-item:last-child .pipe-connector{display:none}
+.pipe-num{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:12px;font-weight:700;flex-shrink:0;position:relative}
+.pipe-num::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;opacity:.3;animation:ringPulse 2s ease-in-out infinite}
+@keyframes ringPulse{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.15);opacity:.1}}
+.p-done{background:rgba(57,255,20,.12);color:var(--green);border:1px solid rgba(57,255,20,.3)}
+.p-active{background:rgba(0,245,255,.12);color:var(--cyan);border:1px solid rgba(0,245,255,.3)}
+.p-pending{background:rgba(255,255,255,.04);color:var(--muted);border:1px solid rgba(255,255,255,.08)}
+.pipe-name{font-family:var(--font-head);font-size:12px;font-weight:700;margin-bottom:4px;letter-spacing:.5px}
+.pipe-desc{font-size:12px;color:var(--muted);line-height:1.6}
+.aug-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aug-toggle{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:.2s}
+.aug-toggle:hover{border-color:rgba(0,245,255,.2);background:rgba(0,245,255,.04)}
+.aug-toggle.on{border-color:rgba(0,245,255,.3);background:rgba(0,245,255,.06)}
+.aug-lbl{font-size:12px;font-weight:600}
+.sw{width:40px;height:22px;background:rgba(255,255,255,.08);border-radius:11px;position:relative;transition:.3s;flex-shrink:0}
+.sw.on{background:rgba(0,245,255,.3);box-shadow:0 0 10px rgba(0,245,255,.3)}
+.sw-thumb{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--muted);top:3px;left:3px;transition:.3s}
+.sw.on .sw-thumb{left:21px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.slider-row{display:flex;align-items:center;gap:12px;padding:8px 0}
+.slider-lbl{font-size:11px;color:var(--muted);min-width:80px;letter-spacing:.5px}
+.slider-val{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--cyan);min-width:40px;text-align:right}
+input[type=range]{-webkit-appearance:none;flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--cyan);cursor:pointer;box-shadow:0 0 10px var(--cyan);transition:.2s}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.2)}
+.tip-card{background:linear-gradient(135deg,var(--s2),var(--s3));border:1px solid var(--border);border-radius:14px;padding:16px;transition:.3s;cursor:pointer;position:relative;overflow:hidden}
+.tip-card:hover{transform:translateY(-3px);border-color:rgba(0,245,255,.2)}
+.tip-head{font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:1px;margin-bottom:8px}
+.tip-body{font-size:12px;color:var(--muted);line-height:1.65}
+.tip-tag{display:inline-block;font-size:9px;padding:2px 8px;border-radius:10px;font-family:var(--font-head);letter-spacing:1px;margin-bottom:8px}
+.report-page{display:flex;gap:14px;padding:14px;background:rgba(255,255,255,.02);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;transition:.2s}
+.report-page:hover{border-color:rgba(0,245,255,.2);background:rgba(0,245,255,.03)}
+.rp-num{font-family:var(--font-head);font-size:10px;font-weight:700;color:var(--cyan);background:rgba(0,245,255,.08);border:1px solid rgba(0,245,255,.2);padding:4px 10px;border-radius:8px;flex-shrink:0;height:fit-content;letter-spacing:1px}
+.rp-head{font-family:var(--font-head);font-size:11px;font-weight:700;margin-bottom:4px;letter-spacing:.5px}
+.rp-desc{font-size:12px;color:var(--muted);line-height:1.6}
+.chk-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:.25s}
+.chk-item:hover{border-color:rgba(0,245,255,.2);background:rgba(0,245,255,.03)}
+.chk-item.done{border-color:rgba(57,255,20,.25);background:rgba(57,255,20,.04)}
+.chk-box{width:22px;height:22px;border-radius:6px;border:2px solid var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.25s;font-size:12px}
+.chk-item.done .chk-box{background:rgba(57,255,20,.2);border-color:var(--green);color:var(--green);box-shadow:0 0 10px rgba(57,255,20,.3)}
+.chk-text{font-size:13px;font-weight:500;flex:1}
+.chk-item.done .chk-text{color:var(--green)}
+.progress-bar-wrap{height:6px;background:rgba(255,255,255,.06);border-radius:3px;margin-top:14px;overflow:hidden}
+.progress-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),var(--cyan));transition:width .5s;box-shadow:0 0 10px var(--green)}
+.chat-shell{background:linear-gradient(135deg,var(--s1),var(--s2));border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.chat-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(0,245,255,.04)}
+.chat-title{font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan)}
+.chat-msgs{display:flex;flex-direction:column;gap:12px;max-height:340px;overflow-y:auto;padding:18px;scroll-behavior:smooth}
+.chat-msgs::-webkit-scrollbar{width:4px}
+.chat-msgs::-webkit-scrollbar-thumb{background:rgba(0,245,255,.3);border-radius:2px}
+.msg{padding:12px 16px;border-radius:14px;font-size:13px;line-height:1.7;max-width:86%}
+.msg.ai{background:rgba(0,245,255,.06);border:1px solid rgba(0,245,255,.15);border-bottom-left-radius:4px;align-self:flex-start}
+.msg.user{background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);border-bottom-right-radius:4px;align-self:flex-end;color:#ffaa88}
+.msg-from{font-family:var(--font-head);font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:5px}
+.typing-indicator{display:none;align-items:center;gap:6px;padding:12px 16px;background:rgba(0,245,255,.06);border:1px solid rgba(0,245,255,.15);border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start;width:fit-content}
+.typing-indicator span{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:typeBounce .9s infinite}
+.typing-indicator span:nth-child(2){animation-delay:.15s}
+.typing-indicator span:nth-child(3){animation-delay:.3s}
+@keyframes typeBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-8px)}}
+.qp-row{display:flex;flex-wrap:wrap;gap:7px;padding:12px 18px;border-top:1px solid var(--border)}
+.qp{font-size:10px;font-family:var(--font-head);padding:5px 12px;border-radius:20px;cursor:pointer;background:rgba(0,245,255,.05);border:1px solid rgba(0,245,255,.15);color:var(--cyan2);transition:.2s;letter-spacing:.5px}
+.qp:hover{background:rgba(0,245,255,.12);border-color:rgba(0,245,255,.35);color:var(--cyan)}
+.chat-input-area{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border)}
+.chat-input{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:11px 16px;border-radius:10px;font-family:var(--font-mono);font-size:12px;outline:none;transition:.2s}
+.chat-input:focus{border-color:rgba(0,245,255,.35);box-shadow:0 0 0 3px rgba(0,245,255,.06)}
+.chat-input::placeholder{color:var(--muted)}
+.glos-row{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);align-items:start}
+.glos-row:last-child{border-bottom:none}
+.glos-term{font-family:var(--font-head);font-size:11px;font-weight:700;color:var(--cyan);letter-spacing:.5px}
+.glos-def{font-size:12px;color:var(--muted);line-height:1.6}
+.upload-zone{border:2px dashed rgba(0,245,255,.25);border-radius:16px;padding:48px;text-align:center;cursor:pointer;transition:.3s;position:relative;overflow:hidden}
+.upload-zone:hover{border-color:rgba(0,245,255,.5);background:rgba(0,245,255,.04)}
+.upload-zone.drag{border-color:var(--cyan);background:rgba(0,245,255,.08);box-shadow:var(--glow-cyan)}
+.upload-icon{font-size:48px;margin-bottom:14px;animation:uploadBounce 2s ease-in-out infinite}
+@keyframes uploadBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.upload-text{font-family:var(--font-head);font-size:12px;letter-spacing:1px;margin-bottom:8px}
+.upload-sub{font-size:11px;color:var(--muted)}
+.model-row{display:grid;grid-template-columns:160px repeat(4,1fr);gap:0;align-items:center}
+.model-row.head{font-family:var(--font-head);font-size:9px;letter-spacing:1.5px;color:var(--muted);padding:8px 0;border-bottom:1px solid var(--border)}
+.model-row.data{padding:10px 0;border-bottom:1px solid rgba(26,46,64,.4);transition:.2s;cursor:pointer}
+.model-row.data:hover{background:rgba(0,245,255,.03)}
+.model-row.data.best{background:rgba(0,245,255,.05);border-bottom-color:rgba(0,245,255,.15)}
+.mc{padding:0 8px;font-size:12px}
+.mc.bold{font-family:var(--font-head);font-size:11px;font-weight:700}
+.mc.center{text-align:center}
+.best-tag{font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(0,245,255,.1);border:1px solid rgba(0,245,255,.25);color:var(--cyan);font-family:var(--font-head);letter-spacing:.5px}
+.loader-wrap{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+.loader-wrap.out{opacity:0;pointer-events:none}
+.loader-ring{width:80px;height:80px;border-radius:50%;border:2px solid rgba(0,245,255,.15);border-top-color:var(--cyan);animation:spin 1s linear infinite;box-shadow:var(--glow-cyan)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-text{font-family:var(--font-head);font-size:11px;letter-spacing:3px;color:var(--cyan);margin-top:20px;animation:blink 1.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* Spinner overlay */
+.spin-overlay{position:absolute;inset:0;background:rgba(2,12,20,.7);display:flex;align-items:center;justify-content:center;z-index:20;border-radius:14px}
+.spin-ring{width:48px;height:48px;border-radius:50%;border:3px solid rgba(0,245,255,.15);border-top-color:var(--cyan);animation:spin .8s linear infinite}
+/* Per-class coverage bars */
+.cov-bar-wrap{margin-top:10px}
+.cov-row{display:grid;grid-template-columns:90px 1fr 48px;gap:8px;align-items:center;margin-bottom:6px}
+.cov-lbl{font-size:11px;font-weight:600}
+.cov-track{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+.cov-fill{height:100%;border-radius:3px;transition:width 1s ease}
+.cov-num{font-family:var(--font-mono);font-size:10px;color:var(--muted);text-align:right}
+@media(max-width:768px){
+  .grid2,.grid3,.grid4,.demo-layout{grid-template-columns:1fr}
+  main{padding:16px}
+  .nav-tabs{padding:0 16px}
+  .header-stats{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="loader-wrap" id="loader">
+  <div class="loader-ring"></div>
+  <div class="loader-text">INITIALIZING SYSTEM</div>
+</div>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="bg-grid"></div>
+<div class="bg-particles" id="particles"></div>
+<div class="scanline"></div>
+
+<header>
+  <div class="header-inner">
+    <div class="logo-wrap">
+      <div class="logo-hex"><div class="logo-inner">⬡</div></div>
+      <div>
+        <div class="logo-text">DUALITY<span>.AI</span></div>
+        <div class="logo-sub">DESERT SEGMENTATION COMMAND CENTER</div>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="hstat"><div class="hstat-val c-cyan" id="hIoU">—</div><div class="hstat-lbl">BEST IoU</div></div>
+      <div class="hstat"><div class="hstat-val c-green" id="hEpoch">—</div><div class="hstat-lbl">EPOCH</div></div>
+      <div class="hstat"><div class="hstat-val c-orange" id="hInfer">—</div><div class="hstat-lbl">INFERENCE</div></div>
+      <div class="hstat"><div class="hstat-val c-gold">10</div><div class="hstat-lbl">CLASSES</div></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div class="backend-badge offline" id="backendBadge">⬤ CONNECTING...</div>
+      <div class="live-badge"><span class="live-dot"></span>SYSTEM ONLINE</div>
+    </div>
+  </div>
+</header>
+
+<div class="nav-tabs">
+  <div class="ntab active" onclick="showTab('demo',this)"><span class="ntab-icon">📷</span>LIVE DEMO<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('metrics',this)"><span class="ntab-icon">📊</span>METRICS<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('classes',this)"><span class="ntab-icon">🏷️</span>CLASSES<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('pipeline',this)"><span class="ntab-icon">⚙️</span>PIPELINE<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('augment',this)"><span class="ntab-icon">✂️</span>AUGMENT<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('models',this)"><span class="ntab-icon">🧠</span>MODELS<div class="ntab-glow"></div></div>
+  <!-- <div class="ntab" onclick="showTab('tips',this)"><span class="ntab-icon">💡</span>TIPS<div class="ntab-glow"></div></div> -->
+  <div class="ntab" onclick="showTab('report',this)"><span class="ntab-icon">📄</span>REPORT<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('checklist',this)"><span class="ntab-icon">✅</span>CHECKLIST<div class="ntab-glow"></div></div>
+  <div class="ntab" onclick="showTab('glossary',this)"><span class="ntab-icon">📖</span>GLOSSARY<div class="ntab-glow"></div></div>
+  <!-- <div class="ntab" onclick="showTab('ai',this)"><span class="ntab-icon">🤖</span>AI ADVISOR<div class="ntab-glow"></div></div> -->
+</div>
+
+<main>
+
+<!-- ═══════════ LIVE DEMO ═══════════ -->
+<div class="panel show" id="p-demo">
+  <div class="demo-layout">
+    <div>
+      <div class="feed-wrap feed-corners" id="cameraWrap">
+        <div class="feed-label live">⬤ LIVE CAMERA FEED</div>
+        <div class="scan-line"></div>
+        <video id="videoEl" autoplay muted playsinline></video>
+        <canvas id="segCanvas" class="seg-canvas"></canvas>
+      </div>
+      <div class="action-row" style="margin-top:10px">
+        <button class="btn btn-blue" onclick="startCamera()">📷 Start Camera</button>
+        <button class="btn btn-red" onclick="capturePhoto()">📸 Capture</button>
+        <button class="btn btn-cyan" onclick="toggleOverlay()">🔀 Overlay</button>
+      </div>
+    </div>
+    <div>
+      <div class="feed-wrap feed-corners" style="position:relative">
+        <div class="feed-label seg">⬡ SEGMENTED OUTPUT</div>
+        <canvas id="segOutput" width="640" height="480"></canvas>
+        <div class="spin-overlay" id="segSpinner" style="display:none">
+          <div class="spin-ring"></div>
+        </div>
+      </div>
+      <div class="action-row" style="margin-top:10px">
+        <button class="btn btn-green" onclick="runSegDemo()" id="btnRunSeg">▶ Run Demo</button>
+        <button class="btn btn-gold" onclick="downloadResult()">⬇ Download</button>
+        <button class="btn btn-purple" onclick="uploadFile()">⬆ Upload Image</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleUpload(event)"/>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">📋</span> INFERENCE RESULTS <span id="modeBadge" style="font-size:9px;padding:2px 8px;border-radius:8px;background:rgba(255,215,0,.1);color:var(--gold);border:1px solid rgba(255,215,0,.25);margin-left:auto">—</span></div>
+      <div class="result-item"><span class="result-key">Mean IoU</span><span class="result-val c-orange" id="resIoU">—</span></div>
+      <div class="result-item"><span class="result-key">Inference Time</span><span class="result-val c-gold" id="resTime">—</span></div>
+      <div class="result-item"><span class="result-key">Confidence</span><span class="result-val c-green" id="resConf">—</span></div>
+      <div class="result-item"><span class="result-key">Dominant Class</span><span class="result-val c-cyan" id="resDom">—</span></div>
+      <div class="result-item"><span class="result-key">Model</span><span class="result-val c-purple">DeepLabV3+ ResNet-101</span></div>
+      <div class="result-item"><span class="result-key">Backend</span><span class="result-val" id="resBackend" style="color:var(--muted)">Not connected</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">🎨</span> CLASS LEGEND <span style="font-size:9px;color:var(--muted);margin-left:auto">(live coverage)</span></div>
+      <div class="legend-grid" id="legendGrid"></div>
+    </div>
+  </div>
+
+  <!-- Class Coverage Bars from real prediction -->
+  <div class="card" id="coverageCard" style="display:none">
+    <div class="card-title"><span class="ti">📊</span> REAL-TIME CLASS COVERAGE</div>
+    <div class="cov-bar-wrap" id="coverageBars"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="ti">⬆</span> UPLOAD &amp; ANALYZE IMAGE</div>
+    <div class="upload-zone" id="uploadZone" onclick="uploadFile()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+      <div class="upload-icon">🏔️</div>
+      <div class="upload-text">DROP DESERT IMAGE HERE OR CLICK TO UPLOAD</div>
+      <div class="upload-sub">PNG, JPG, WEBP supported · Real segmentation via best_model.pth</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ METRICS ═══════════ -->
+<div class="panel" id="p-metrics">
+  <div class="grid4" style="margin-bottom:18px">
+    <div class="stat-card"><div class="stat-val c-cyan" id="metIoU">—</div><div class="stat-lbl">MEAN IoU</div><div class="stat-trend c-green" id="metIoUTrend">Loading from model…</div></div>
+    <div class="stat-card"><div class="stat-val c-orange" id="metLoss">—</div><div class="stat-lbl">FINAL LOSS</div><div class="stat-trend" id="metLossTrend" style="color:var(--muted)">—</div></div>
+    <div class="stat-card"><div class="stat-val c-green" id="metInfer">—</div><div class="stat-lbl">INFERENCE</div><div class="stat-trend c-green" id="metInferTrend">—</div></div>
+    <div class="stat-card"><div class="stat-val c-gold" id="metParams">—</div><div class="stat-lbl">PARAMS</div><div class="stat-trend c-cyan">DeepLabV3+ R101</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">📉</span> TRAINING &amp; VALIDATION LOSS</div>
+      <div style="height:220px;position:relative"><canvas id="lossChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">📈</span> MEAN IoU PROGRESSION</div>
+      <div style="height:220px;position:relative"><canvas id="iouChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="ti">🎯</span> PER-CLASS IoU BREAKDOWN <span style="font-size:9px;color:var(--muted);margin-left:auto" id="iouSource">static defaults · upload image for live values</span></div>
+    <div id="iouBars"></div>
+  </div>
+</div>
+
+<!-- ═══════════ CLASSES ═══════════ -->
+<div class="panel" id="p-classes">
+  <div class="grid3" id="classCards" style="margin-bottom:18px"></div>
+  <div class="card">
+    <div class="card-title"><span class="ti">📋</span> FULL CLASS REGISTRY</div>
+    <div style="overflow-x:auto">
+      <div class="model-row head"><div class="mc">CLASS NAME</div><div class="mc center">ID</div><div class="mc center">DIFFICULTY</div><div class="mc center">IoU SCORE</div><div class="mc center">PIXEL %</div></div>
+      <div id="classTableRows"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PIPELINE ═══════════ -->
+<div class="panel" id="p-pipeline">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">⚙️</span> TRAINING PIPELINE</div>
+      <div id="pipeWrap"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">📂</span> FILE STRUCTURE</div>
+      <pre style="font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.8;white-space:pre-wrap"><span style="color:var(--cyan)">duality_seg/</span>
+├── <span style="color:var(--gold)">backend/</span>
+│   ├── <span style="color:var(--green)">app.py</span>          ← Flask API server
+│   ├── <span style="color:var(--green)">requirements.txt</span>
+│   └── <span style="color:var(--orange)">best_model.pth</span>  ← Your model weights
+├── <span style="color:var(--gold)">frontend/</span>
+│   └── <span style="color:var(--green)">index.html</span>      ← This dashboard
+├── <span style="color:var(--gold)">training/</span>
+│   ├── train.py &amp; test.py
+├── <span style="color:var(--gold)">data/</span>
+│   ├── train/ → rgb/ + segmentation/
+│   └── val/   → rgb/ + segmentation/
+└── <span style="color:var(--purple)">README.md</span></pre>
+      <div class="action-row" style="margin-top:14px">
+        <button class="btn btn-cyan btn-lg" onclick="alert('cd backend\npip install -r requirements.txt\ncp best_model.pth .\npython app.py')">▶ START BACKEND</button>
+        <button class="btn btn-orange" onclick="checkBackend()">🔄 CHECK STATUS</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ AUGMENTATION ═══════════ -->
+<div class="panel" id="p-augment">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">✂️</span> AUGMENTATION TOGGLES</div>
+      <div class="aug-grid" id="augToggles"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">🎚️</span> INTENSITY CONTROLS</div>
+      <div class="slider-row"><span class="slider-lbl">Rotation °</span><input type="range" min="0" max="90" value="30" step="5" oninput="this.nextElementSibling.textContent=this.value+'°'"/><span class="slider-val">30°</span></div>
+      <div class="slider-row"><span class="slider-lbl">Brightness</span><input type="range" min="0" max="100" value="30" step="5" oninput="this.nextElementSibling.textContent=this.value+'%'"/><span class="slider-val">30%</span></div>
+      <div class="slider-row"><span class="slider-lbl">Contrast</span><input type="range" min="0" max="100" value="30" step="5" oninput="this.nextElementSibling.textContent=this.value+'%'"/><span class="slider-val">30%</span></div>
+      <div class="slider-row"><span class="slider-lbl">Saturation</span><input type="range" min="0" max="100" value="20" step="5" oninput="this.nextElementSibling.textContent=this.value+'%'"/><span class="slider-val">20%</span></div>
+      <div class="slider-row"><span class="slider-lbl">Hue Jitter</span><input type="range" min="0" max="50" value="10" step="1" oninput="this.nextElementSibling.textContent=this.value+'%'"/><span class="slider-val">10%</span></div>
+      <div class="slider-row"><span class="slider-lbl">Crop Scale</span><input type="range" min="50" max="100" value="80" step="5" oninput="this.nextElementSibling.textContent=this.value+'%'"/><span class="slider-val">80%</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="ti">👁️</span> AUGMENTATION PREVIEW</div>
+    <canvas id="augPreview" width="800" height="160" style="width:100%;border-radius:10px;background:#000"></canvas>
+    <div class="action-row" style="margin-top:12px">
+      <button class="btn btn-cyan" onclick="animateAugPreview()">▶ Animate</button>
+      <button class="btn btn-orange" onclick="resetAug()">↺ Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODELS ═══════════ -->
+<div class="panel" id="p-models">
+  <div class="card">
+    <div class="card-title"><span class="ti">🧠</span> MODEL COMPARISON</div>
+    <div class="model-row head"><div class="mc">MODEL</div><div class="mc center">IoU</div><div class="mc center">SPEED</div><div class="mc center">PARAMS</div><div class="mc center">STATUS</div></div>
+    <div id="modelRows"></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">⚡</span> WHY DeepLabV3+</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.8">
+        <div style="margin-bottom:10px"><span style="color:var(--cyan)">►</span> <strong style="color:var(--text)">ASPP Module</strong> captures multi-scale context</div>
+        <div style="margin-bottom:10px"><span style="color:var(--cyan)">►</span> <strong style="color:var(--text)">Encoder-Decoder</strong> restores spatial details</div>
+        <div style="margin-bottom:10px"><span style="color:var(--cyan)">►</span> <strong style="color:var(--text)">ImageNet pretraining</strong> gives rich texture features</div>
+        <div style="margin-bottom:10px"><span style="color:var(--cyan)">►</span> <strong style="color:var(--text)">Auxiliary loss</strong> prevents gradient vanishing</div>
+        <div><span style="color:var(--cyan)">►</span> <strong style="color:var(--text)">Proven benchmark</strong> on Cityscapes &amp; PASCAL VOC</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">📊</span> ARCHITECTURE DIAGRAM</div>
+      <canvas id="archDiagram" width="400" height="200" style="width:100%"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ TIPS ═══════════ -->
+<div class="panel" id="p-tips">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px" id="tipGrid"></div>
+</div>
+
+<!-- ═══════════ REPORT ═══════════ -->
+<div class="panel" id="p-report">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">📄</span> REPORT STRUCTURE (8 PAGES)</div>
+      <div id="reportPages"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">📝</span> DOCUMENTATION TIPS</div>
+      <div style="display:flex;flex-direction:column;gap:10px" id="docTips"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="ti">✍️</span> SAMPLE FAILURE CASE ENTRY</div>
+    <div style="background:rgba(0,0,0,.3);border-radius:12px;padding:18px;font-family:var(--font-mono);font-size:12px;line-height:1.8;border:1px solid var(--border)">
+      <div><span style="color:var(--cyan)">Task:</span> <span style="color:var(--text)">Model Training on Desert Dataset</span></div>
+      <div><span style="color:var(--cyan)">Initial IoU:</span> <span style="color:var(--orange)">0.36</span></div>
+      <div><span style="color:var(--cyan)">Issue:</span> <span style="color:var(--text)">Low recall for "Logs" class — occlusion by rocks and dry grass</span></div>
+      <div><span style="color:var(--cyan)">Solution:</span> <span style="color:var(--green)">Class weight 3× + mosaic augmentation → IoU 0.38</span></div>
+      <div><span style="color:var(--cyan)">Remaining:</span> <span style="color:var(--muted)">Logs still misclassified as Rocks at distance → future: TTA</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CHECKLIST ═══════════ -->
+<div class="panel" id="p-checklist">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="ti">✅</span> SUBMISSION CHECKLIST</div>
+      <div id="checkItems"></div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px">
+        <span style="font-size:12px;color:var(--muted)" id="checkCount">0 / 10 complete</span>
+        <button class="btn btn-green" style="padding:6px 14px;font-size:9px" onclick="checkAll()">CHECK ALL</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="ti">⚠️</span> CRITICAL RULES</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="padding:12px;background:rgba(255,45,120,.06);border:1px solid rgba(255,45,120,.2);border-radius:10px;font-size:12px;color:var(--muted)"><span style="color:var(--pink);font-weight:700">❌ NEVER</span> use testImages/ data during training — instant disqualification</div>
+        <div style="padding:12px;background:rgba(57,255,20,.04);border:1px solid rgba(57,255,20,.15);border-radius:10px;font-size:12px;color:var(--muted)"><span style="color:var(--green);font-weight:700">✓ MUST</span> include model weights + scripts + config in submission ZIP</div>
+        <div style="padding:12px;background:rgba(0,245,255,.04);border:1px solid rgba(0,245,255,.12);border-radius:10px;font-size:12px;color:var(--muted)"><span style="color:var(--cyan);font-weight:700">📄 REPORT</span> must be PDF or DOCX — max 8 pages</div>
+        <div style="padding:12px;background:rgba(255,215,0,.04);border:1px solid rgba(255,215,0,.12);border-radius:10px;font-size:12px;color:var(--muted)"><span style="color:var(--gold);font-weight:700">📊 METRIC</span> IoU score worth 80 pts — optimize this first</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ GLOSSARY ═══════════ -->
+<div class="panel" id="p-glossary">
+  <div class="card">
+    <div class="card-title"><span class="ti">📖</span> TECHNICAL GLOSSARY</div>
+    <div id="glossRows"></div>
+  </div>
+</div>
+
+<!-- ═══════════ AI ADVISOR ═══════════
+<div class="panel" id="p-ai">
+  <div class="grid4" style="margin-bottom:18px">
+    <button class="btn btn-cyan btn-lg" style="width:100%;justify-content:center" onclick="qAsk('How can I improve IoU for rare classes like Logs and Flowers?')">💡 Rare Class IoU</button>
+    <button class="btn btn-orange btn-lg" style="width:100%;justify-content:center" onclick="qAsk('Best augmentation strategies for synthetic desert terrain?')">✂️ Augmentation Tips</button>
+    <button class="btn btn-green btn-lg" style="width:100%;justify-content:center" onclick="qAsk('My training loss has plateaued at 0.4. Debug plan?')">📉 Fix Loss Plateau</button>
+    <button class="btn btn-purple btn-lg" style="width:100%;justify-content:center" onclick="qAsk('Explain DeepLabV3+ and why it suits this challenge.')">🧠 Explain Model</button>
+    <button class="btn btn-gold btn-lg" style="width:100%;justify-content:center" onclick="qAsk('How to write a strong failure case analysis for the report?')">📄 Report Writing</button>
+    <button class="btn btn-pink btn-lg" style="width:100%;justify-content:center" onclick="qAsk('Domain adaptation for synthetic-to-real transfer?')">🔄 Domain Adapt</button>
+    <button class="btn btn-blue btn-lg" style="width:100%;justify-content:center" onclick="qAsk('Step-by-step plan to push mean IoU above 0.80?')">🎯 Push IoU to 0.80+</button>
+    <button class="btn btn-cyan btn-lg" style="width:100%;justify-content:center" onclick="qAsk('How to handle class imbalance for the desert dataset?')">⚖️ Class Imbalance</button>
+  </div>
+  <div class="chat-shell">
+    <div class="chat-header">
+      <div class="chat-title">🤖 AI MODEL ADVISOR — POWERED BY CLAUDE</div>
+      <button class="btn btn-orange" style="padding:6px 14px;font-size:9px" onclick="clearChat()">CLEAR</button>
+    </div>
+    <div class="chat-msgs" id="chatMsgs">
+      <div class="msg ai"><div class="msg-from">AI ADVISOR</div>Welcome! I'm your expert for the Duality AI desert segmentation hackathon. Ask me about DeepLabV3+, IoU optimization, augmentation, or report writing. 🏜️</div>
+    </div>
+    <div class="typing-indicator" id="typingDot"><span></span><span></span><span></span></div>
+    <div class="qp-row">
+      <span class="qp" onclick="qAsk('Give me a quick IoU improvement checklist')">Quick IoU checklist</span>
+      <span class="qp" onclick="qAsk('Compare Focal Loss vs Weighted CrossEntropy')">Focal vs WeightedCE</span>
+      <span class="qp" onclick="qAsk('What does a good per-class confusion matrix look like?')">Confusion matrix tips</span>
+      <span class="qp" onclick="qAsk('How do I set up TensorBoard?')">TensorBoard setup</span>
+    </div>
+    <div class="chat-input-area">
+      <input class="chat-input" id="chatInput" placeholder="Ask anything about training, IoU, augmentation, reporting..." onkeydown="if(event.key==='Enter')sendChat()"/>
+      <button class="btn btn-cyan" onclick="sendChat()">SEND →</button>
+    </div>
+  </div>
+</div> -->
+
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   CONFIG — change BACKEND_URL to match your Flask server
+═══════════════════════════════════════════════════════ */
+const BACKEND_URL = 'http://localhost:5000';
+
+/* ═══ CURSOR ═══ */
+const cur=document.getElementById('cursor'),curD=document.getElementById('cursorDot');
+let mx=0,my=0,cx=0,cy=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;curD.style.left=mx+'px';curD.style.top=my+'px'});
+(function animCur(){cx+=(mx-cx)*.15;cy+=(my-cy)*.15;cur.style.left=cx+'px';cur.style.top=cy+'px';requestAnimationFrame(animCur)})();
+document.querySelectorAll('button,.ntab,.qp,.leg-item,.tip-card,.chk-item').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{cur.style.width='30px';cur.style.height='30px';cur.style.borderColor='var(--orange)'});
+  el.addEventListener('mouseleave',()=>{cur.style.width='16px';cur.style.height='16px';cur.style.borderColor='var(--cyan)'});
+});
+
+/* ═══ PARTICLES ═══ */
+const PC=document.getElementById('particles');
+['var(--cyan)','var(--orange)','var(--green)','var(--gold)','var(--purple)'].forEach((c)=>{
+  for(let j=0;j<6;j++){
+    const p=document.createElement('div');p.className='particle';
+    const sz=Math.random()*4+2;
+    p.style.cssText=`width:${sz}px;height:${sz}px;background:${c};left:${Math.random()*100}%;animation-duration:${8+Math.random()*12}s;animation-delay:${Math.random()*10}s;box-shadow:0 0 ${sz*3}px ${c}`;
+    PC.appendChild(p);
+  }
+});
+
+/* ═══ LOADER ═══ */
+setTimeout(()=>document.getElementById('loader').classList.add('out'),1800);
+
+/* ═══ TAB SWITCHER ═══ */
+function showTab(id,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show'));
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('p-'+id).classList.add('show');
+  el.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════
+   BACKEND INTEGRATION
+═══════════════════════════════════════════════════════ */
+let backendOnline = false;
+let modelInfo = null;
+
+async function checkBackend(){
+  const badge = document.getElementById('backendBadge');
+  badge.className='backend-badge offline';
+  badge.textContent='⬤ CONNECTING...';
+  try {
+    const [healthRes, infoRes] = await Promise.all([
+      fetch(`${BACKEND_URL}/health`, {signal: AbortSignal.timeout(4000)}),
+      fetch(`${BACKEND_URL}/model_info`, {signal: AbortSignal.timeout(4000)})
+    ]);
+    if(!healthRes.ok) throw new Error('Backend unhealthy');
+    const health = await healthRes.json();
+    modelInfo = await infoRes.json();
+    backendOnline = true;
+
+    // Update header stats from real model
+    const meta = modelInfo.meta || {};
+    if(meta.best_miou) document.getElementById('hIoU').textContent = (+meta.best_miou).toFixed(3);
+    if(meta.epoch)     document.getElementById('hEpoch').textContent = meta.epoch;
+    if(meta.params_M)  document.getElementById('metParams').textContent = meta.params_M+'M';
+
+    if(health.model === 'live'){
+      badge.className='backend-badge live';
+      badge.textContent='⬤ MODEL LIVE';
+      document.getElementById('btnRunSeg').textContent='▶ Run Real Segmentation';
+      document.getElementById('resBackend').textContent='localhost:5000 (live)';
+      document.getElementById('resBackend').style.color='var(--green)';
+      // Update metrics panel
+      if(meta.best_miou){
+        document.getElementById('metIoU').textContent=(+meta.best_miou).toFixed(3);
+        document.getElementById('metIoUTrend').textContent='▲ from checkpoint';
+        document.getElementById('metIoUTrend').style.color='var(--green)';
+      }
+      if(meta.params_M){
+        document.getElementById('metParams').textContent=meta.params_M+'M';
+      }
+    } else {
+      badge.className='backend-badge demo';
+      badge.textContent='⬤ DEMO MODE';
+      document.getElementById('resBackend').textContent='localhost:5000 (demo - no model file)';
+      document.getElementById('resBackend').style.color='var(--gold)';
+    }
+    document.getElementById('hInfer').textContent='<50ms';
+  } catch(e){
+    backendOnline = false;
+    badge.className='backend-badge offline';
+    badge.textContent='⬤ OFFLINE';
+    document.getElementById('resBackend').textContent='Backend not running';
+    document.getElementById('resBackend').style.color='var(--pink)';
+  }
+}
+
+// Auto check on load
+checkBackend();
+
+/* ═══════════════════════════════════════════════════════
+   PREDICT — sends image to Flask and updates all metrics
+═══════════════════════════════════════════════════════ */
+async function predictImage(file){
+  const spinner = document.getElementById('segSpinner');
+  spinner.style.display='flex';
+  document.querySelector('.scan-line').style.display='block';
+
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+
+    const res = await fetch(`${BACKEND_URL}/predict`, {method:'POST', body:fd});
+    if(!res.ok) throw new Error(`Server error ${res.status}`);
+    const data = await res.json();
+
+    spinner.style.display='none';
+
+    // ── Show mask ──────────────────────────────────────────────
+    const img = new Image();
+    img.onload = () => {
+      const c = document.getElementById('segOutput');
+      const ctx = c.getContext('2d');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      // Draw original first
+      const orig = new Image();
+      orig.onload = () => {
+        ctx.drawImage(orig, 0, 0, c.width, c.height);
+        ctx.globalAlpha = 0.65;
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        ctx.globalAlpha = 1.0;
+      };
+      orig.src = URL.createObjectURL(file);
+    };
+    img.src = data.mask_b64;
+
+    // ── Update result cards ────────────────────────────────────
+    document.getElementById('resIoU').textContent = data.mean_iou.toFixed(3);
+    document.getElementById('resTime').textContent = data.inference_ms + ' ms';
+    document.getElementById('resConf').textContent = data.confidence + '%';
+    document.getElementById('resDom').textContent  = data.dominant_class;
+    document.getElementById('hIoU').textContent    = data.mean_iou.toFixed(3);
+    document.getElementById('hInfer').textContent  = data.inference_ms + 'ms';
+
+    const modeBadge = document.getElementById('modeBadge');
+    modeBadge.textContent = data.mode === 'live' ? '🟢 LIVE MODEL' : '🟡 DEMO';
+    modeBadge.style.color = data.mode === 'live' ? 'var(--green)' : 'var(--gold)';
+
+    // ── Update legend with real pixel coverage ─────────────────
+    updateLegendWithCoverage(data.pixel_pct);
+
+    // ── Update IoU bars with real per-class IoU ────────────────
+    updateIoUBars(data.per_class_iou);
+    document.getElementById('iouSource').textContent = 
+      data.mode === 'live' ? '▲ live from best_model.pth' : '▲ estimated from prediction';
+
+    // ── Coverage bars ──────────────────────────────────────────
+    showCoverageBars(data.pixel_pct);
+
+    // ── Metrics panel ──────────────────────────────────────────
+    document.getElementById('metIoU').textContent  = data.mean_iou.toFixed(3);
+    document.getElementById('metInfer').textContent = data.inference_ms + 'ms';
+    document.getElementById('metInferTrend').textContent = 
+      data.inference_ms < 50 ? '✓ Under 50ms target' : '⚠ Above 50ms target';
+
+  } catch(e){
+    spinner.style.display='none';
+    console.error('Prediction error:', e);
+    // Fallback to visual demo
+    runSegDemoFallback();
+    document.getElementById('modeBadge').textContent='⚠ BACKEND OFFLINE';
+    document.getElementById('modeBadge').style.color='var(--pink)';
+  }
+}
+
+function updateLegendWithCoverage(pixelPct){
+  const lg = document.getElementById('legendGrid');
+  lg.querySelectorAll('.leg-pct').forEach(el=>{
+    const name = el.previousElementSibling?.textContent;
+    if(name && pixelPct[name] !== undefined){
+      el.textContent = pixelPct[name].toFixed(1) + '%';
+    }
+  });
+}
+
+function updateIoUBars(iouScores){
+  CLS.forEach((c,i)=>{
+    const bar = document.getElementById('bar'+i);
+    const num = document.querySelector('#iouBars .iou-row:nth-child('+(i+1)+') .iou-num');
+    if(iouScores[c.name] !== undefined){
+      const v = iouScores[c.name];
+      if(bar) bar.style.width = (v*100)+'%';
+      if(num) num.textContent = v.toFixed(2);
+    }
+  });
+}
+
+function showCoverageBars(pixelPct){
+  const card = document.getElementById('coverageCard');
+  const container = document.getElementById('coverageBars');
+  card.style.display='block';
+  container.innerHTML='';
+  CLS.forEach((c,i)=>{
+    const pct = pixelPct[c.name] || 0;
+    const row = document.createElement('div');
+    row.className='cov-row';
+    row.innerHTML=`
+      <span class="cov-lbl" style="color:${c.color}">${c.name}</span>
+      <div class="cov-track"><div class="cov-fill" id="cov${i}" style="background:${c.color};width:0%"></div></div>
+      <span class="cov-num">${pct.toFixed(1)}%</span>`;
+    container.appendChild(row);
+    setTimeout(()=>{ document.getElementById('cov'+i).style.width=Math.min(pct*2,100)+'%'; },100+i*50);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════════ */
+const CLS=[
+  {id:100, name:'Trees',         color:'#2d8a2d',diff:'Medium',  iou:0.72,pct:8},
+  {id:200, name:'Lush Bushes',   color:'#00b87a',diff:'Medium',  iou:0.68,pct:6},
+  {id:300, name:'Dry Grass',     color:'#c8a878',diff:'Easy',    iou:0.81,pct:14},
+  {id:500, name:'Dry Bushes',    color:'#a06830',diff:'Hard',    iou:0.60,pct:9},
+  {id:550, name:'Gnd Clutter',   color:'#7a5028',diff:'Hard',    iou:0.55,pct:5},
+  {id:600, name:'Flowers',       color:'#d4a000',diff:'Very Hard',iou:0.42,pct:2},
+  {id:700, name:'Logs',          color:'#8b4513',diff:'Very Hard',iou:0.38,pct:2},
+  {id:800, name:'Rocks',         color:'#888888',diff:'Hard',    iou:0.65,pct:10},
+  {id:7100,name:'Landscape',     color:'#b89060',diff:'Easy',    iou:0.85,pct:35},
+  {id:10000,name:'Sky',          color:'#60b0d8',diff:'Easy',    iou:0.91,pct:9},
+];
+
+/* LEGEND */
+const lg=document.getElementById('legendGrid');
+CLS.forEach(c=>{
+  const d=document.createElement('div');d.className='leg-item';
+  d.innerHTML=`<span class="leg-dot" style="background:${c.color};color:${c.color}"></span><span class="leg-name">${c.name}</span><span class="leg-pct">${c.pct}%</span>`;
+  lg.appendChild(d);
+});
+
+/* IoU BARS */
+const iouC=document.getElementById('iouBars');
+const barColors=['linear-gradient(90deg,#2d8a2d,#5aff5a)','linear-gradient(90deg,#00b87a,#00ffcc)','linear-gradient(90deg,#c8a878,#ffd700)','linear-gradient(90deg,#a06830,#ff9050)','linear-gradient(90deg,#7a5028,#c08040)','linear-gradient(90deg,#d4a000,#ffd700)','linear-gradient(90deg,#8b4513,#c07030)','linear-gradient(90deg,#777,#bbb)','linear-gradient(90deg,#b89060,#e0c090)','linear-gradient(90deg,#60b0d8,#00e5ff)'];
+CLS.forEach((c,i)=>{
+  const r=document.createElement('div');r.className='iou-row';
+  r.innerHTML=`<span class="iou-lbl" style="color:${c.color}">${c.name}</span>
+    <div class="bar-track"><div class="bar-fill" id="bar${i}" style="background:${barColors[i]};box-shadow:0 0 8px ${c.color}40"></div></div>
+    <span class="iou-num" style="color:${c.color}">${c.iou.toFixed(2)}</span>`;
+  iouC.appendChild(r);
+  setTimeout(()=>{document.getElementById('bar'+i).style.width=(c.iou*100)+'%'},400+i*80);
+});
+
+/* CLASS CARDS */
+function hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`${r},${g},${b}`}
+const cc=document.getElementById('classCards');
+CLS.forEach(c=>{
+  const d=document.createElement('div');
+  d.style.cssText=`background:linear-gradient(135deg,var(--s1),var(--s2));border:1px solid rgba(${hexToRgb(c.color)},.25);border-radius:14px;padding:16px;text-align:center;transition:.3s;cursor:pointer`;
+  d.innerHTML=`<div style="width:36px;height:36px;border-radius:8px;background:${c.color}22;border:1px solid ${c.color}55;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 12px ${c.color}40">🌿</div>
+    <div style="font-family:var(--font-head);font-size:10px;font-weight:700;color:${c.color};margin-bottom:4px">${c.name}</div>
+    <div style="font-size:10px;color:var(--muted)">ID: ${c.id}</div>
+    <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:${c.color};text-shadow:0 0 12px ${c.color}80;margin-top:6px" id="clsIoU${c.id}">${c.iou.toFixed(2)}</div>
+    <div style="font-size:9px;color:var(--muted);letter-spacing:1px">IoU SCORE</div>`;
+  d.addEventListener('mouseenter',()=>{d.style.transform='translateY(-4px)';d.style.boxShadow=`0 0 20px ${c.color}30`});
+  d.addEventListener('mouseleave',()=>{d.style.transform='';d.style.boxShadow=''});
+  cc.appendChild(d);
+});
+
+/* CLASS TABLE */
+const ctr=document.getElementById('classTableRows');
+const diffColors={Easy:'#39ff14',Medium:'#00e5ff',Hard:'#ffd700','Very Hard':'#ff2d78'};
+CLS.forEach(c=>{
+  const d=document.createElement('div');d.className='model-row data';
+  d.innerHTML=`<div class="mc bold" style="color:${c.color}">${c.name}</div>
+    <div class="mc center" style="color:var(--muted)">${c.id}</div>
+    <div class="mc center"><span style="font-size:10px;padding:2px 9px;border-radius:10px;background:${diffColors[c.diff]}18;border:1px solid ${diffColors[c.diff]}40;color:${diffColors[c.diff]};font-family:var(--font-head)">${c.diff}</span></div>
+    <div class="mc center" style="font-family:var(--font-mono);font-weight:700;color:${c.color}" id="tblIoU${c.id}">${c.iou.toFixed(2)}</div>
+    <div class="mc center" style="color:var(--muted)" id="tblPct${c.id}">${c.pct}%</div>`;
+  ctr.appendChild(d);
+});
+
+/* PIPELINE */
+const PIPE=[
+  {n:'Download dataset',d:'Get RGB + segmentation images from FalconCloud.',st:'done'},
+  {n:'Setup environment',d:'pip install -r requirements.txt — creates EDU conda env.',st:'done'},
+  {n:'Train model',d:'python train.py — 50 epochs, AdamW, DeepLabV3+ R101. Saves best_model.pth.',st:'active'},
+  {n:'Start Flask backend',d:'cd backend && python app.py — serves predictions at localhost:5000.',st:'active'},
+  {n:'Evaluate on val set',d:'Track mean IoU + per-class scores via /predict endpoint.',st:'pending'},
+  {n:'Package & submit',d:'ZIP: model weights + scripts + config + README + 8-page PDF.',st:'pending'},
+];
+const pw=document.getElementById('pipeWrap');
+PIPE.forEach((p,i)=>{
+  const d=document.createElement('div');d.className='pipe-item';
+  const icon=p.st==='done'?'✓':p.st==='active'?'▶':(i+1);
+  const col=p.st==='done'?'var(--green)':p.st==='active'?'var(--cyan)':'var(--muted)';
+  d.innerHTML=`<div class="pipe-connector"></div>
+    <div class="pipe-num p-${p.st}">${icon}</div>
+    <div><div class="pipe-name" style="color:${col}">${p.n}</div><div class="pipe-desc">${p.d}</div></div>`;
+  pw.appendChild(d);
+});
+
+/* AUGMENTATION */
+const AUGS=[{l:'Horizontal Flip',on:true},{l:'Vertical Flip',on:true},{l:'Random Rotation',on:true},{l:'Color Jitter',on:true},{l:'Gaussian Blur',on:false},{l:'Random Crop',on:false},{l:'Cutout/Erasing',on:false},{l:'Mosaic Mix',on:false}];
+const at=document.getElementById('augToggles');
+AUGS.forEach(a=>{
+  const d=document.createElement('div');d.className='aug-toggle'+(a.on?' on':'');
+  d.innerHTML=`<span class="aug-lbl">${a.l}</span><div class="sw${a.on?' on':''}"><div class="sw-thumb"></div></div>`;
+  d.onclick=()=>{d.classList.toggle('on');d.querySelector('.sw').classList.toggle('on')};
+  at.appendChild(d);
+});
+function resetAug(){document.querySelectorAll('.aug-toggle').forEach((d,i)=>{const on=i<4;d.className='aug-toggle'+(on?' on':'');d.querySelector('.sw').className='sw'+(on?' on':'')})}
+function animateAugPreview(){
+  const c=document.getElementById('augPreview'),ctx=c.getContext('2d');
+  const colors=['#2d8a2d','#c8a878','#60b0d8','#888','#b89060'];
+  let t=0;
+  function draw(){
+    ctx.clearRect(0,0,800,160);
+    for(let i=0;i<5;i++){
+      const x=20+i*155,cx2=x+65,cy=80;
+      ctx.save();ctx.translate(cx2,cy);ctx.rotate(Math.sin(t+i)*0.3);
+      const sc=0.85+Math.sin(t*1.5+i)*.15;ctx.scale(sc,sc);
+      ctx.fillStyle=colors[i]+'33';ctx.strokeStyle=colors[i];ctx.lineWidth=2;
+      ctx.beginPath();ctx.roundRect(-55,-55,110,110,12);ctx.fill();ctx.stroke();
+      ctx.fillStyle=colors[i];ctx.font='bold 10px Orbitron,monospace';ctx.textAlign='center';
+      ctx.fillText(['FLIP','ROTATE','JITTER','CROP','SCALE'][i],0,6);ctx.restore();
+    }
+    t+=0.03;requestAnimationFrame(draw);
+  }
+  draw();
+}
+setTimeout(animateAugPreview,2000);
+
+/* MODELS */
+const MODELS=[
+  {n:'DeepLabV3+ R101',iou:0.74,speed:'38ms',params:'61M',best:true},
+  {n:'DeepLabV3+ R50', iou:0.68,speed:'28ms',params:'42M',best:false},
+  {n:'SegFormer-B5',   iou:0.72,speed:'45ms',params:'85M',best:false},
+  {n:'FCN ResNet-101', iou:0.60,speed:'22ms',params:'54M',best:false},
+  {n:'PSPNet R50',     iou:0.65,speed:'32ms',params:'49M',best:false},
+];
+const mr=document.getElementById('modelRows');
+MODELS.forEach(m=>{
+  const d=document.createElement('div');d.className='model-row data'+(m.best?' best':'');
+  d.innerHTML=`<div class="mc bold" style="color:${m.best?'var(--cyan)':'var(--text)'}">${m.n} ${m.best?'<span class="best-tag">ACTIVE</span>':''}</div>
+    <div class="mc center" style="font-family:var(--font-mono);color:${m.best?'var(--cyan)':'var(--text)'};font-weight:700">${m.iou.toFixed(2)}</div>
+    <div class="mc center" style="color:${m.speed==='38ms'?'var(--green)':'var(--muted)'}">${m.speed}</div>
+    <div class="mc center" style="color:var(--muted)">${m.params}</div>
+    <div class="mc center">${m.best?'<span style="color:var(--green)">✓ Active</span>':'<span style="color:var(--muted)">—</span>'}</div>`;
+  mr.appendChild(d);
+});
+
+/* ARCH DIAGRAM */
+(function(){
+  const c=document.getElementById('archDiagram'),ctx=c.getContext('2d');
+  const blocks=[{l:'Input\n512×512',x:10,c:'#00e5ff'},{l:'ResNet-101\nBackbone',x:100,c:'#b44fff'},{l:'ASPP\nModule',x:195,c:'#ff6b35'},{l:'Decoder',x:280,c:'#ffd700'},{l:'10-Class\nOutput',x:365,c:'#39ff14'}];
+  blocks.forEach((b,i)=>{
+    const x=b.x,y=60,w=80,h=60;
+    ctx.fillStyle=b.c+'22';ctx.strokeStyle=b.c;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.roundRect(x,y,w,h,8);ctx.fill();ctx.stroke();
+    ctx.fillStyle=b.c;ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';
+    b.l.split('\n').forEach((line,li)=>ctx.fillText(line,x+w/2,y+22+li*14));
+    if(i<blocks.length-1){ctx.strokeStyle=b.c+'80';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(x+w,y+h/2);ctx.lineTo(blocks[i+1].x,y+h/2);ctx.stroke();ctx.setLineDash([])}
+  });
+  ctx.fillStyle='rgba(0,245,255,.15)';ctx.strokeStyle='rgba(0,245,255,.3)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.roundRect(100,140,175,30,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#00e5ff';ctx.font='9px Orbitron,monospace';ctx.textAlign='center';
+  ctx.fillText('Aux Loss (×0.4)',187,160);
+})();
+
+/* TIPS */
+const TIPS=[
+  {h:'Class Weighting',t:'LOSS',b:'Set Logs weight 3×, Flowers 2.5×, Rocks 1.5× in CrossEntropyLoss.',c:'var(--cyan)',tc:'rgba(0,245,255,.15)'},
+  {h:'Focal Loss',t:'LOSS',b:'Replace CE with Focal Loss (γ=2). Pushes gradients toward hard pixels.',c:'var(--orange)',tc:'rgba(255,107,53,.1)'},
+  {h:'Larger Input Size',t:'DATA',b:'Increase img-size 512→768. Captures fine detail for small objects.',c:'var(--green)',tc:'rgba(57,255,20,.08)'},
+  {h:'Backbone LR Scale',t:'OPTIM',b:'Set backbone LR = 0.1× head LR. Protects ImageNet features.',c:'var(--gold)',tc:'rgba(255,215,0,.08)'},
+  {h:'Cosine Warm-Up',t:'SCHED',b:'Add 5-epoch warm-up before cosine annealing. Prevents unstable starts.',c:'var(--purple)',tc:'rgba(180,79,255,.08)'},
+  {h:'Test-Time Augment',t:'INFER',b:'Average predictions over flipped/rotated variants. Free +2-3% IoU.',c:'var(--pink)',tc:'rgba(255,45,120,.08)'},
+  {h:'Auxiliary Loss',t:'MODEL',b:'DeepLabV3+ aux head at 0.4× improves gradient flow to backbone.',c:'var(--cyan)',tc:'rgba(0,245,255,.08)'},
+  {h:'Mosaic Augment',t:'DATA',b:'Combine 4 images into one training sample. Forces partial-object learning.',c:'var(--orange)',tc:'rgba(255,107,53,.08)'},
+  {h:'Gradient Clipping',t:'OPTIM',b:'Clip gradients at norm=1.0 to prevent explosion on imbalanced batches.',c:'var(--green)',tc:'rgba(57,255,20,.08)'},
+];
+const tg=document.getElementById('tipGrid');
+TIPS.forEach(t=>{
+  const d=document.createElement('div');d.className='tip-card';
+  d.innerHTML=`<span class="tip-tag" style="background:${t.tc};color:${t.c};border:1px solid ${t.c}44">${t.t}</span>
+    <div class="tip-head" style="color:${t.c}">${t.h}</div><div class="tip-body">${t.b}</div>`;
+  tg.appendChild(d);
+});
+
+/* REPORT */
+const RPT=[
+  {pg:'Page 1',h:'Title & Overview',d:'Team name, project name, problem statement: why desert segmentation matters for UGV autonomy.'},
+  {pg:'Page 2',h:'Methodology',d:'Model architecture, training config, loss function, optimizer, augmentations, hyperparameter choices.'},
+  {pg:'Pages 3–4',h:'Results & Performance',d:'Mean IoU chart, per-class IoU bars, confusion matrix, before/after comparison images.'},
+  {pg:'Pages 5–6',h:'Challenges & Solutions',d:'Low-IoU classes, training instability, what you tried, what worked. Failure case images.'},
+  {pg:'Page 7',h:'Conclusion & Future Work',d:'Final IoU score, key insights, 3 concrete future improvements (TTA, self-supervised, domain adapt).'},
+];
+const rp=document.getElementById('reportPages');
+RPT.forEach(r=>{
+  const d=document.createElement('div');d.className='report-page';
+  d.innerHTML=`<span class="rp-num">${r.pg}</span><div><div class="rp-head">${r.h}</div><div class="rp-desc">${r.d}</div></div>`;
+  rp.appendChild(d);
+});
+const DOCTIPS=[
+  {icon:'📸',t:'Use screenshots from runs/ folder — loss graphs, IoU progression, colorized masks'},
+  {icon:'🔴',t:'Include Before & After images for each failure case'},
+  {icon:'📏',t:'Plain language — assume the reader is new to semantic segmentation'},
+  {icon:'🎯',t:'Lead with your best IoU number on page 1 — make it impossible to miss'},
+];
+const dt=document.getElementById('docTips');
+DOCTIPS.forEach(t=>{
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;gap:10px;padding:11px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--muted);align-items:flex-start';
+  d.innerHTML=`<span style="font-size:18px;flex-shrink:0">${t.icon}</span><span>${t.t}</span>`;
+  dt.appendChild(d);
+});
+
+/* CHECKLIST */
+const CHKS=['best_model.pth checkpoint file','train.py training script','test.py inference script','config.yaml with hyperparameters','Colorized segmentation output images','README.md with run instructions','8-page PDF or DOCX report','IoU scores + loss graphs in report','Failure case analysis with images','Clean train/val/test split — no leakage'];
+const ci=document.getElementById('checkItems');
+function updateProgress(){
+  const done=document.querySelectorAll('.chk-item.done').length;
+  document.getElementById('checkCount').textContent=`${done} / ${CHKS.length} complete`;
+  document.getElementById('progressBar').style.width=(done/CHKS.length*100)+'%';
+}
+CHKS.forEach((c,i)=>{
+  const d=document.createElement('div');d.className='chk-item';
+  d.innerHTML=`<div class="chk-box" id="cb${i}"></div><span class="chk-text">${c}</span>`;
+  d.onclick=()=>{d.classList.toggle('done');document.getElementById('cb'+i).textContent=d.classList.contains('done')?'✓':'';updateProgress()};
+  ci.appendChild(d);
+});
+function checkAll(){document.querySelectorAll('.chk-item').forEach((d,i)=>{d.classList.add('done');document.getElementById('cb'+i).textContent='✓'});updateProgress()}
+
+/* GLOSSARY */
+const GLOSS=[
+  ['IoU','Intersection over Union — overlap between predicted and ground truth masks. Primary metric (80 pts).'],
+  ['Semantic Segmentation','Labeling every pixel in an image with a class ID.'],
+  ['DeepLabV3+','ASPP for multi-scale context + encoder-decoder for spatial detail. 61M params.'],
+  ['ASPP','Atrous Spatial Pyramid Pooling — captures objects at multiple scales with dilated convolutions.'],
+  ['Digital Twin','Synthetic virtual replica of a real-world environment (Duality AI Falcon platform).'],
+  ['Class Imbalance','Logs/Flowers ~2% vs Landscape ~35%. Needs weighted loss or focal loss.'],
+  ['Domain Shift','Difference between train env (desert A) and test env (desert B).'],
+  ['Focal Loss','Down-weights easy examples, focuses on hard pixels. Helps rare classes.'],
+  ['Backbone','Pretrained ResNet-101 feature extractor. Fine-tuned at 0.1× head LR.'],
+  ['TTA','Test-Time Augmentation — average predictions over augmented test variants.'],
+];
+const gr=document.getElementById('glossRows');
+GLOSS.forEach(([t,d])=>{
+  const r=document.createElement('div');r.className='glos-row';
+  r.innerHTML=`<span class="glos-term">${t}</span><span class="glos-def">${d}</span>`;
+  gr.appendChild(r);
+});
+
+/* ═══ CHARTS ═══ */
+function genSim(n){
+  const tl=[],vl=[],iu=[];let t=2.3,v=2.4,u=0.06;
+  for(let i=0;i<n;i++){
+    t=Math.max(0.09,t-(0.055+Math.random()*.04)*(1-i/(n*1.2)));
+    v=Math.max(0.13,v-(0.05+Math.random()*.03)*(1-i/(n*1.3))+(Math.random()-.5)*.015);
+    u=Math.min(0.76,u+(0.016+Math.random()*.01));
+    tl.push(+t.toFixed(3));vl.push(+v.toFixed(3));iu.push(+u.toFixed(3));
+  }
+  return{tl,vl,iu};
+}
+const SIM=genSim(50),EPS=Array.from({length:50},(_,i)=>i+1);
+const chartCfg={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#4a7a90',font:{size:11,family:"'JetBrains Mono'"}}},tooltip:{backgroundColor:'#0a2035',borderColor:'rgba(0,245,255,.2)',borderWidth:1,titleColor:'#00f5ff',bodyColor:'#c8e8f8'}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a7a90',font:{size:10},maxTicksLimit:10}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a7a90',font:{size:10}}}}};
+new Chart(document.getElementById('lossChart'),{type:'line',data:{labels:EPS,datasets:[{label:'Train Loss',data:SIM.tl,borderColor:'#ff6b35',backgroundColor:'rgba(255,107,53,.08)',borderWidth:2,pointRadius:0,fill:true,tension:.4},{label:'Val Loss',data:SIM.vl,borderColor:'#00f5ff',backgroundColor:'rgba(0,245,255,.05)',borderWidth:2,pointRadius:0,fill:true,tension:.4}]},options:chartCfg});
+new Chart(document.getElementById('iouChart'),{type:'line',data:{labels:EPS,datasets:[{label:'Mean IoU',data:SIM.iu,borderColor:'#39ff14',backgroundColor:'rgba(57,255,20,.07)',borderWidth:2,pointRadius:0,fill:true,tension:.4}]},options:{...chartCfg,scales:{...chartCfg.scales,y:{...chartCfg.scales.y,min:0,max:1}}}});
+
+/* ═══ CAMERA ═══ */
+let stream=null,overlayOn=true;
+async function startCamera(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}});
+    document.getElementById('videoEl').srcObject=stream;
+    runSegLoop();
+  }catch(e){alert('Camera not available. Use Upload Image instead.')}
+}
+function runSegLoop(){
+  const v=document.getElementById('videoEl'),c=document.getElementById('segCanvas'),ctx=c.getContext('2d');
+  c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+  function frame(){
+    if(!overlayOn){ctx.clearRect(0,0,c.width,c.height);requestAnimationFrame(frame);return}
+    ctx.drawImage(v,0,0,c.width,c.height);
+    const id=ctx.getImageData(0,0,c.width,c.height);const px=id.data;
+    for(let i=0;i<px.length;i+=4){
+      const g=(px[i]+px[i+1]+px[i+2])/3;
+      if(g>200){px[i]=96;px[i+1]=176;px[i+2]=216;px[i+3]=120}
+      else if(g>150){px[i]=45;px[i+1]=138;px[i+2]=45;px[i+3]=120}
+      else if(g>100){px[i]=200;px[i+1]=168;px[i+2]=120;px[i+3]=120}
+      else if(g>60){px[i]=160;px[i+1]=104;px[i+2]=48;px[i+3]=120}
+      else{px[i]=136;px[i+1]=136;px[i+2]=136;px[i+3]=120}
+    }
+    ctx.putImageData(id,0,0);requestAnimationFrame(frame);
+  }
+  frame();
+}
+function toggleOverlay(){overlayOn=!overlayOn}
+
+/* ═══ DEMO FALLBACK (no backend) ═══ */
+function runSegDemoFallback(){
+  const c=document.getElementById('segOutput'),ctx=c.getContext('2d');
+  c.width=640;c.height=480;
+  const regions=[
+    {x:0,y:0,w:640,h:100,color:'#60b0d8aa',label:'Sky'},
+    {x:0,y:80,w:200,h:220,color:'#2d8a2daa',label:'Trees'},
+    {x:180,y:120,w:160,h:120,color:'#00b87aaa',label:'Lush Bushes'},
+    {x:0,y:280,w:640,h:200,color:'#b89060aa',label:'Landscape'},
+    {x:320,y:200,w:180,h:120,color:'#c8a878aa',label:'Dry Grass'},
+    {x:500,y:180,w:140,h:140,color:'#888888aa',label:'Rocks'},
+    {x:60,y:320,w:80,h:60,color:'#a06830aa',label:'Dry Bushes'},
+    {x:400,y:350,w:50,h:40,color:'#8b4513aa',label:'Logs'},
+    {x:260,y:360,w:30,h:30,color:'#d4a000aa',label:'Flowers'},
+  ];
+  regions.forEach(r=>{
+    ctx.fillStyle=r.color;ctx.fillRect(r.x,r.y,r.w,r.h);
+    ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='bold 11px Orbitron,monospace';
+    ctx.fillText(r.label,r.x+6,r.y+18);
+  });
+  // Animate scan
+  let sy=0;
+  const scan=setInterval(()=>{ctx.strokeStyle='rgba(0,245,255,.6)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(640,sy);ctx.stroke();sy+=8;if(sy>480)clearInterval(scan)},20);
+  // Simulated values
+  document.getElementById('resIoU').textContent=(0.70+Math.random()*.06).toFixed(3);
+  document.getElementById('resTime').textContent=(30+Math.random()*12).toFixed(1)+' ms';
+  document.getElementById('resConf').textContent=(88+Math.random()*8).toFixed(1)+'%';
+  document.getElementById('resDom').textContent=CLS[Math.floor(Math.random()*CLS.length)].name;
+  document.getElementById('modeBadge').textContent='🟡 DEMO';
+  document.getElementById('modeBadge').style.color='var(--gold)';
+}
+
+/* ═══ RUN SEGMENTATION — routes to backend or fallback ═══ */
+async function runSegDemo(){
+  if(backendOnline){
+    // Capture a frame from camera if active, else show message
+    const v = document.getElementById('videoEl');
+    if(v.srcObject){
+      const c=document.createElement('canvas');c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+      c.getContext('2d').drawImage(v,0,0);
+      c.toBlob(blob=>{ if(blob) predictImage(blob); },'image/jpeg',0.92);
+    } else {
+      alert('Upload an image or start the camera to run real segmentation.\n\nFalling back to visual demo...');
+      runSegDemoFallback();
+    }
+  } else {
+    runSegDemoFallback();
+  }
+}
+
+/* ═══ UPLOAD ═══ */
+function uploadFile(){document.getElementById('fileInput').click()}
+function handleUpload(e){
+  const f=e.target.files[0];if(!f)return;
+  // Show preview
+  const r=new FileReader();
+  r.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.getElementById('segOutput'),ctx=c.getContext('2d');
+      c.width=img.width;c.height=img.height;
+      ctx.drawImage(img,0,0);
+      document.getElementById('uploadZone').innerHTML=
+        '<div class="upload-icon">✅</div><div class="upload-text">IMAGE LOADED — RUNNING SEGMENTATION</div><div class="upload-sub">'+f.name+'</div>';
+      // Send to backend
+      if(backendOnline){
+        predictImage(f);
+      } else {
+        setTimeout(runSegDemoFallback,300);
+      }
+    };
+    img.src=ev.target.result;
+  };
+  r.readAsDataURL(f);
+}
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag');
+  const f=e.dataTransfer.files[0];if(f)handleUpload({target:{files:[f]}});
+}
+
+/* ═══ CAPTURE / DOWNLOAD ═══ */
+function capturePhoto(){
+  const v=document.getElementById('videoEl');
+  if(!v.srcObject){alert('Start camera first');return}
+  const c=document.createElement('canvas');c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+  c.getContext('2d').drawImage(v,0,0);
+  const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='capture.png';a.click();
+}
+function downloadResult(){
+  const c=document.getElementById('segOutput');
+  const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='segmentation_result.png';a.click();
+}
+
+/* ═══ AI ADVISOR ═══ */
+const SYS=`You are an expert AI advisor for the Duality AI Offroad Semantic Scene Segmentation hackathon.
+Dataset: Synthetic desert environment images from FalconCloud/Falcon platform.
+10 classes: Trees(100), Lush Bushes(200), Dry Grass(300), Dry Bushes(500), Ground Clutter(550), Flowers(600), Logs(700), Rocks(800), Landscape(7100), Sky(10000).
+Model: DeepLabV3+ with ResNet-101 backbone. Backend: Flask at localhost:5000.
+Give concise, expert, actionable advice. Use **bold** for key terms. Under 200 words unless comprehensive plan needed.`;
+let chatHist=[];
+async function sendChat(){
+  const inp=document.getElementById('chatInput');const msg=inp.value.trim();if(!msg)return;
+  addMsg(msg,'user');inp.value='';
+  document.getElementById('typingDot').style.display='flex';
+  chatHist.push({role:'user',content:msg});
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:SYS,messages:chatHist})});
+    const data=await r.json();
+    const reply=data.content?.map(b=>b.text||'').join('')||'Error.';
+    chatHist.push({role:'assistant',content:reply});
+    document.getElementById('typingDot').style.display='none';
+    addMsg(reply,'ai');
+  }catch(e){document.getElementById('typingDot').style.display='none';addMsg('⚠️ Could not reach Claude API.','ai')}
+}
+function addMsg(txt,role){
+  const box=document.getElementById('chatMsgs');
+  const d=document.createElement('div');d.className='msg '+role;
+  d.innerHTML=`<div class="msg-from">${role==='ai'?'AI ADVISOR':'YOU'}</div>${fmt(txt)}`;
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+function fmt(t){return t.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--cyan)">$1</strong>').replace(/`(.*?)`/g,'<code style="background:rgba(0,0,0,.4);padding:1px 5px;border-radius:4px;color:var(--orange);font-family:var(--font-mono)">$1</code>').replace(/\n/g,'<br>')}
+function clearChat(){chatHist=[];document.getElementById('chatMsgs').innerHTML='<div class="msg ai"><div class="msg-from">AI ADVISOR</div>Chat cleared. Ask me anything!</div>'}
+function qAsk(q){showTab('ai',document.querySelectorAll('.ntab')[10]);document.getElementById('chatInput').value=q;sendChat()}
+</script>
+</body>
+</html>
