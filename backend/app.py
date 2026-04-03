@@ -53,6 +53,23 @@ CORS(app)
 model      = None
 model_meta = {}
 
+def make_json_safe(obj):
+    import torch
+    import numpy as np
+
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu().tolist()
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_safe(v) for v in obj]
+    elif isinstance(obj, (int, float, str, bool)) or obj is None:
+        return obj
+    else:
+        return str(obj)   # fallback for unknown types
+
 def build_model():
     """Build DeepLabV3+-ResNet101 with num_classes=10."""
     m = deeplabv3_resnet101(weights=None, num_classes=NUM_CLASSES)
@@ -99,14 +116,18 @@ def load_model():
     n_params  = sum(p.numel() for p in net.parameters()) / 1e6
 
     model_meta = {
-        "mode"       : "live",
-        "device"     : DEVICE,
-        "load_time_s": round(elapsed, 2),
-        "params_M"   : round(n_params, 1),
-        "checkpoint" : saved_meta,
-        "best_miou"  : saved_meta.get("best_miou", saved_meta.get("miou", None)),
-        "epoch"      : saved_meta.get("epoch", None),
-    }
+    "mode"       : "live",
+    "device"     : DEVICE,
+    "load_time_s": round(elapsed, 2),
+    "params_M"   : round(n_params, 1),
+
+    # ❌ DO NOT send full checkpoint
+    # "checkpoint": saved_meta,
+
+    # ✅ Only safe values
+    "best_miou"  : float(saved_meta.get("best_miou", saved_meta.get("miou", 0))) if saved_meta else None,
+    "epoch"      : int(saved_meta.get("epoch", 0)) if saved_meta else None,
+}
     app.logger.info(f"✅ Model loaded in {elapsed:.2f}s  ({n_params:.1f}M params)")
 
 # ── TRANSFORMS ──────────────────────────────────────────────────────────────
@@ -198,12 +219,12 @@ def health():
 @app.get("/model_info")
 def model_info():
     return jsonify({
-        "model_name"  : "DeepLabV3+ (ResNet-101)",
-        "num_classes" : NUM_CLASSES,
-        "classes"     : CLASSES,
-        "img_size"    : list(IMG_SIZE),
-        "device"      : DEVICE,
-        "meta": model_meta,
+        "model_name": "DeepLabV3+ (ResNet-101)",
+        "num_classes": NUM_CLASSES,
+        "classes": CLASSES,
+        "img_size": list(IMG_SIZE),
+        "device": DEVICE,
+        "meta": model_meta   # ✅ now safe already
     })
 
 
