@@ -19,20 +19,34 @@ CLASS_MAP = {
     700:(6,"Logs"), 800:(7,"Rocks"), 7100:(8,"Landscape"), 10000:(9,"Sky")
 }
 
-# 🔥 STRONG weights
 CLASS_WEIGHTS = torch.tensor([2,4,2,4,4,6,6,5,1,0.5], dtype=torch.float32)
 
 # ================= DATASET =================
 class DesertDataset(Dataset):
-    def __init__(self, root, split, size=384, augment=False):
+    def __init__(self, root, split, size=256, augment=False):
         self.root = Path(root)
+
+        # 🔥 AUTO FIX NESTED FOLDER
+        if not (self.root / "train").exists():
+            subfolders = list(self.root.iterdir())
+            if len(subfolders) == 1:
+                self.root = subfolders[0]
+
         self.size = (size, size)
         self.augment = augment
 
         self.rgb_dir = self.root / split / "Color_Images"
         self.mask_dir = self.root / split / "Segmentation"
 
+        print(f"\n📂 Using dataset path: {self.root}")
+        print(f"📂 RGB dir: {self.rgb_dir}")
+        print(f"📂 Mask dir: {self.mask_dir}")
+
         self.images = sorted(list(self.rgb_dir.glob("*")))
+        print(f"✅ Found {len(self.images)} images")
+
+        if len(self.images) == 0:
+            raise ValueError("❌ Dataset is EMPTY! Check folder structure.")
 
         self.lut = np.zeros(65536, dtype=np.uint8)
         for raw,(idx,_) in CLASS_MAP.items():
@@ -51,7 +65,6 @@ class DesertDataset(Dataset):
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)
 
-        # 🔥 Resize BOTH
         img = img.resize(self.size)
         mask = mask.resize(self.size, Image.NEAREST)
 
@@ -67,7 +80,8 @@ class DesertDataset(Dataset):
 
         return img, mask
 
-    def __len__(self): return len(self.images)
+    def __len__(self): 
+        return len(self.images)
 
 # ================= MODEL =================
 def build_model():
@@ -102,13 +116,13 @@ def compute_iou(pred, target):
 # ================= TRAIN =================
 def train(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("Device:", device)
+    print("🚀 Device:", device)
 
     train_ds = DesertDataset(args.data,"train",augment=True)
     val_ds   = DesertDataset(args.data,"val")
 
-    train_dl = DataLoader(train_ds,batch_size=args.batch,shuffle=True)
-    val_dl   = DataLoader(val_ds,batch_size=args.batch)
+    train_dl = DataLoader(train_ds, batch_size=args.batch, shuffle=True, num_workers=2, drop_last=True)
+    val_dl   = DataLoader(val_ds, batch_size=args.batch, num_workers=2)
 
     model = build_model().to(device)
 
@@ -117,25 +131,39 @@ def train(args):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
+    best_iou = 0   # 🔥 FIXED
+
     for epoch in range(args.epochs):
         model.train()
-        total=0
+        total = 0
+        total_steps = len(train_dl)
 
-        for img,mask in train_dl:
-            img,mask = img.to(device),mask.to(device)
+        print("\n" + "="*60)
+        print(f"Starting Epoch {epoch+1}/{args.epochs}")
+        print("="*60)
+        print("[TRAIN] Starting training phase...")
+
+        for step, (img, mask) in enumerate(train_dl):
+            img, mask = img.to(device), mask.to(device)
 
             out = model(img)["out"]
-            loss = ce(out,mask)+dice(out,mask)
+            loss = ce(out, mask) + dice(out, mask)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            total+=loss.item()
+            total += loss.item()
 
-        # VALIDATION
+            if step % max(1, total_steps // 20) == 0:
+                print(f"[Train] Step {step}/{total_steps} | Loss: {loss.item():.4f}")
+
+        # ================= VALIDATION =================
+        print("\n[VAL] Running validation...")
+
         model.eval()
         preds=[]; labels=[]
+
         with torch.no_grad():
             for img,mask in val_dl:
                 img = img.to(device)
@@ -148,7 +176,17 @@ def train(args):
 
         iou = compute_iou(preds,labels)
 
-        print(f"Epoch {epoch+1} | Loss {total/len(train_dl):.3f} | IoU {iou:.3f}")
+        print("\n" + "-"*50)
+        print(f"Epoch {epoch+1} Summary:")
+        print(f"Avg Loss: {total/len(train_dl):.4f}")
+        print(f"Mean IoU: {iou:.4f}")
+        print("-"*50)
+
+        # 🔥 SAVE BEST MODEL
+        if iou > best_iou:
+            best_iou = iou
+            torch.save(model.state_dict(), "best_model.pth")
+            print("✅ Best model saved!")
 
 # ================= MAIN =================
 if __name__=="__main__":
@@ -157,6 +195,6 @@ if __name__=="__main__":
     p.add_argument("--epochs", type=int, default=5)
     p.add_argument("--batch", type=int, default=4)
 
-    args, unknown = p.parse_known_args()  # 🔥 FIXED
+    args, unknown = p.parse_known_args()
 
     train(args)
